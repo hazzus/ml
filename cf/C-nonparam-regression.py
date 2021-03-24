@@ -49,7 +49,7 @@ def uniform(dist, param):
 
 
 def triangular(dist, param):
-    return kernel(lambda x: x, dist, param)
+    return kernel(abs, dist, param)
 
 
 def epanechnikov(dist, param):
@@ -57,19 +57,20 @@ def epanechnikov(dist, param):
 
 
 def quartic(dist, param):
-    return (epanechnikov(dist, param) ** 2) * (15 / 16)
+    return (kernel(lambda x: x ** 2, dist, param) ** 2) * (15 / 16)
 
 
 def triweight(dist, param):
-    return (epanechnikov(dist, param) ** 3) * (35 / 32)
+    return (kernel(lambda x: x ** 2, dist, param) ** 3) * (35 / 32)
 
 
 def tricube(dist, param):
-    return (kernel(lambda x: x ** 3, dist, param) ** 3) * (70 / 81)
+    return (kernel(lambda x: abs(x) ** 3, dist, param) ** 3) * (70 / 81)
 
 
 def gaussian(dist, param):
-    return 1 / (math.sqrt(2 * math.pi)) * math.exp((-1 / 2) * ((dist / param) ** 2))
+	x = dist / param
+	return math.exp(-0.5 * x ** 2) / math.sqrt(2 * math.pi)
 
 
 def cosine(dist, param):
@@ -107,8 +108,8 @@ def window_fixed(param):
     return lambda nbs: param
 
 
-def window_variable(param):
-    return lambda nbs: nbs[param][0]
+def window_variable(param, df, target):
+    return lambda nbs: df(nbs[param], target)
 
 
 windows = {
@@ -129,28 +130,28 @@ df = distances[input()]
 kf = kernels[input()]
 wf = windows[input()]
 wp = int(input())
-wfp = wf(wp)
 
-
-dists = sorted(
-    [(df(row, target), int(row[-1]), row[:-1]) for row in ds],
-    key=lambda x: x[0]
-)
-
-
-def fallback():
-    print(sum([x[0] for x in dists]) / n)
-
-
-param = wfp(dists)
-if param == 0:
-    dists = list(filter(lambda y: y[2] == target[:-1], dists))
-    n = len(dists)
-    fallback()
+if wf == window_fixed:
+	wfp = wf(wp)
 else:
-    sum_kernels = sum(map(lambda x: kf(x[0], param), dists))
-    if sum_kernels == 0:
-        fallback()
-    else:
-        sum_kernels_by_dists = sum(map(lambda x: x[1] * kf(x[0], param), dists))
-        print(sum_kernels_by_dists / sum_kernels)
+	wfp = wf(wp, df, target)
+
+ds.sort(key=lambda x: df(x, target))
+
+h = wfp(ds)
+predicted = sum(map(lambda x: x[-1], ds)) / len(ds)
+
+if h == 0:
+	f = list(filter(lambda x: df(x, target) == 0, ds))
+	if len(f) != 0:
+		print(sum(map(lambda x: x[-1], f)) / len(f))
+		exit(0)
+
+	print(predicted)
+	exit(0)
+
+first = sum(map(lambda x: x[-1] * kf(df(x, target), h), ds))
+second = sum(map(lambda x: kf(df(x, target), h), ds))
+
+print(first / second if second != 0 else predicted)
+
